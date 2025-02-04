@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-import time
+import json
 
 # Constants for maze dimensions
 WIDTH = 41  # Must be odd numbers
@@ -17,7 +17,6 @@ ACTION_EFFECTS = {
 }
 
 def generate_maze(width, height):
-    # Initialize the maze grid with walls (1)
     maze = np.ones((height, width), dtype=int)
 
     N, S, E, W = ('N', 'S', 'E', 'W')
@@ -34,10 +33,8 @@ def generate_maze(width, height):
                 maze[ny][nx] = 0  # Mark cell as passage
                 carve_passages(nx, ny)
 
-    # Start carving from (1,1)
     maze[1][1] = 0
     carve_passages(1, 1)
-
     return maze
 
 class Agent:
@@ -54,25 +51,7 @@ class Agent:
         self.visualize = visualize  # Whether to visualize during learning
         self.visualize_interval = visualize_interval  # Visualize every N episodes
         self.build_q_table()
-
-
-    def take_action(self, state, action):
-        x, y = state
-        dx, dy = ACTION_EFFECTS[action]
-        nx, ny = x + dx, y + dy
-        if (0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0] and self.maze[ny][nx] == 0):
-            next_state = (nx, ny)
-            if next_state == self.end:
-                reward = 100  # High reward for reaching the goal
-            else:
-                reward = -1  # Small penalty for each move
-        else:
-            next_state = state
-            reward = -10  # Penalty for hitting a wall
-        return next_state, reward
-
-    # (rest of the code remains the same)
-
+        self.episode_log = []  # List to keep track of episode progress
 
     def build_q_table(self):
         # Initialize Q-table with zeros for all state-action pairs
@@ -80,6 +59,33 @@ class Agent:
             for x in range(self.maze.shape[1]):
                 if self.maze[y][x] == 0:
                     self.q_table[(x, y)] = {action: 0.0 for action in ACTIONS}
+
+    def save_q_table(self, filename):
+        with open(filename, 'w') as file:
+            # Convert tuple keys to string keys
+            q_table_str_keys = {str(k): v for k, v in self.q_table.items()}
+            json.dump(q_table_str_keys, file)
+
+    def load_q_table(self, filename):
+        with open(filename, 'r') as file:
+            q_table_str_keys = json.load(file)
+            # Convert string keys back to tuple keys
+            self.q_table = {eval(k): v for k, v in q_table_str_keys.items()}
+
+    def take_action(self, state, action):
+        x, y = state
+        dx, dy = ACTION_EFFECTS[action]
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0] and self.maze[ny][nx] == 0:
+            next_state = (nx, ny)
+            if next_state == self.end:
+                reward = 100  # High reward for reaching the goal
+            else:
+                reward = -1  # Small penalty for each move     
+        else:
+            next_state = state
+            reward = -10  # Penalty for hitting a wall
+        return next_state, reward
 
     def choose_action(self, state):
         # Epsilon-greedy strategy
@@ -93,6 +99,18 @@ class Agent:
             action = random.choice(max_actions)
         return action
 
+    def log_episode_progress(self, episode, steps, total_reward, reached_goal):
+        self.episode_log.append({
+            'episode': episode,
+            'steps': steps,
+            'total_reward': total_reward,
+            'reached_goal': reached_goal
+        })
+
+    def save_episode_log(self, filename):
+        with open(filename, 'w') as file:
+            json.dump(self.episode_log, file)
+
     def learn(self):
         for episode in range(1, self.episodes + 1):
             self.alpha = max(0.1, self.alpha * 0.995)  # Gradually decrease learning rate
@@ -101,9 +119,8 @@ class Agent:
             self.position = state
             steps = 0
             episode_rewards = 0
-            # (rest of the code remains the same)
+            reached_goal = False
 
-                # For visualization
             if self.visualize and episode % self.visualize_interval == 0:
                 plt.ion()
                 fig, ax = plt.subplots(figsize=(8, 8))
@@ -111,7 +128,6 @@ class Agent:
             while state != self.end:
                 action = self.choose_action(state)
                 next_state, reward = self.take_action(state, action)
-                # Update Q-value
                 old_value = self.q_table[state][action]
                 next_max = max(self.q_table[next_state].values())
                 new_value = (1 - self.alpha) * old_value + self.alpha * (reward + self.gamma * next_max)
@@ -121,7 +137,6 @@ class Agent:
                 steps += 1
                 episode_rewards += reward
 
-                # Visualization during learning
                 if self.visualize and episode % self.visualize_interval == 0:
                     ax.clear()
                     ax.imshow(self.maze, cmap='binary', interpolation='nearest')
@@ -135,27 +150,16 @@ class Agent:
                 if steps > 1000:
                     break  # Prevent infinite loops
 
-            # Close visualization for the episode
+                if state == self.end:
+                    reached_goal = True
+
+            self.log_episode_progress(episode, steps, episode_rewards, reached_goal)
+
             if self.visualize and episode % self.visualize_interval == 0:
                 plt.ioff()
                 plt.close()
 
-            # Optional: print episode summary
-            # print(f'Episode {episode} completed in {steps} steps with total reward {episode_rewards}')
-
-
-
-def choose_action(self, state):
-    q_values = self.q_table[state]
-    max_q = max(q_values.values())
-    probabilities = [np.exp(q / max_q) for q in q_values.values()]
-    sum_probabilities = sum(probabilities)
-    probabilities = [p / sum_probabilities for p in probabilities]
-    action = random.choices(ACTIONS, probabilities)[0]
-    return action
-
     def find_optimal_path(self):
-        # After learning, use the Q-table to find the optimal path
         state = self.start
         path = [state]
         steps = 0
@@ -169,12 +173,11 @@ def choose_action(self, state):
             dx, dy = ACTION_EFFECTS[action]
             nx, ny = x + dx, y + dy
 
-            # Check for validity
-            if (0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0]):
+            if 0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0]:
                 state = (nx, ny)
                 path.append(state)
             else:
-                break  # Stop if next state is invalid
+                break
 
             steps += 1
         return path
@@ -206,7 +209,6 @@ def simulate_agent(agent, delay=0.1):
         next_state, _ = agent.take_action(state, action)
         x, y = next_state
 
-        # Display the agent in the maze
         ax.clear()
         ax.imshow(agent.maze, cmap='binary', interpolation='nearest')
         ax.scatter(x, y, color='blue', s=100)
@@ -215,7 +217,6 @@ def simulate_agent(agent, delay=0.1):
         ax.set_xticks([]), ax.set_yticks([])
         ax.set_title('Agent Navigation')
         plt.pause(delay)
-
         state = next_state
         path.append(state)
         steps += 1
@@ -224,8 +225,19 @@ def simulate_agent(agent, delay=0.1):
     plt.show()
     return path
 
+def feedback_mechanism():
+    rating = input("Rate the agent's performance (1-5): ")
+    comments = input("Any comments or suggestions: ")
+    feedback = {
+        'rating': rating,
+        'comments': comments
+    }
+    with open('feedback.json', 'w') as file:
+        json.dump(feedback, file)
+    print("Thank you for your feedback!")
+
 # Parameters
-width, height = WIDTH, HEIGHT  # Must be odd numbers
+width, height = WIDTH, HEIGHT
 
 # Generate Maze
 maze = generate_maze(width, height)
@@ -235,12 +247,17 @@ start = (1, 1)
 end = (width - 2, height - 2)
 
 # Create Agent with visualization enabled
-agent = Agent(maze, start, end, episodes=30000, alpha=0.7, gamma=0.9, epsilon=0.1, visualize=True, visualize_interval=10)
+agent = Agent(maze, start, end, episodes=100, alpha=0.7, gamma=0.9, epsilon=0.1, visualize=True, visualize_interval=10)
 
 # Agent learns the maze
 print("Agent is learning...")
 agent.learn()
 print("Learning completed.")
+agent.save_q_table('q_table.json')
+agent.save_episode_log('episode_log.json')
+
+# Load the Q-table if needed
+# agent.load_q_table('q_table.json')
 
 # Find the optimal path after learning
 optimal_path = agent.find_optimal_path()
@@ -253,3 +270,6 @@ simulate = input("Do you want to watch the agent navigate the maze? (y/n): ")
 if simulate.lower() == 'y':
     print("Simulating agent navigation...")
     simulate_agent(agent)
+
+# Provide feedback
+feedback_mechanism()
