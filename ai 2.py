@@ -55,6 +55,25 @@ class Agent:
         self.visualize_interval = visualize_interval  # Visualize every N episodes
         self.build_q_table()
 
+
+    def take_action(self, state, action):
+        x, y = state
+        dx, dy = ACTION_EFFECTS[action]
+        nx, ny = x + dx, y + dy
+        if (0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0] and self.maze[ny][nx] == 0):
+            next_state = (nx, ny)
+            if next_state == self.end:
+                reward = 100  # High reward for reaching the goal
+            else:
+                reward = -1  # Small penalty for each move
+        else:
+            next_state = state
+            reward = -10  # Penalty for hitting a wall
+        return next_state, reward
+
+    # (rest of the code remains the same)
+
+
     def build_q_table(self):
         # Initialize Q-table with zeros for all state-action pairs
         for y in range(self.maze.shape[0]):
@@ -76,12 +95,15 @@ class Agent:
 
     def learn(self):
         for episode in range(1, self.episodes + 1):
+            self.alpha = max(0.1, self.alpha * 0.995)  # Gradually decrease learning rate
+            self.epsilon = max(0.1, self.epsilon * 0.995)  # Gradually decrease epsilon
             state = self.start
             self.position = state
             steps = 0
             episode_rewards = 0
+            # (rest of the code remains the same)
 
-            # For visualization
+                # For visualization
             if self.visualize and episode % self.visualize_interval == 0:
                 plt.ion()
                 fig, ax = plt.subplots(figsize=(8, 8))
@@ -121,20 +143,16 @@ class Agent:
             # Optional: print episode summary
             # print(f'Episode {episode} completed in {steps} steps with total reward {episode_rewards}')
 
-    def take_action(self, state, action):
-        x, y = state
-        dx, dy = ACTION_EFFECTS[action]
-        nx, ny = x + dx, y + dy
-        if (0 <= nx < self.maze.shape[1] and 0 <= ny < self.maze.shape[0] and self.maze[ny][nx] == 0):
-            next_state = (nx, ny)
-            if next_state == self.end:
-                reward = 100  # High reward for reaching the goal
-            else:
-                reward = -1  # Small penalty for each move
-        else:
-            next_state = state
-            reward = -10  # Penalty for hitting a wall
-        return next_state, reward
+
+
+def choose_action(self, state):
+    q_values = self.q_table[state]
+    max_q = max(q_values.values())
+    probabilities = [np.exp(q / max_q) for q in q_values.values()]
+    sum_probabilities = sum(probabilities)
+    probabilities = [p / sum_probabilities for p in probabilities]
+    action = random.choices(ACTIONS, probabilities)[0]
+    return action
 
     def find_optimal_path(self):
         # After learning, use the Q-table to find the optimal path
