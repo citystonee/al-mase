@@ -52,6 +52,7 @@ class Agent:
         self.visualize_interval = visualize_interval  # Visualize every N episodes
         self.build_q_table()
         self.episode_log = []  # List to keep track of episode progress
+        self.leaderboard = []  # List to keep track of top-performing agents
 
     def build_q_table(self):
         # Initialize Q-table with zeros for all state-action pairs
@@ -111,6 +112,29 @@ class Agent:
         with open(filename, 'w') as file:
             json.dump(self.episode_log, file)
 
+    def update_leaderboard(self, steps, total_reward):
+        self.leaderboard.append({
+            'steps': steps,
+            'total_reward': total_reward
+        })
+        # Sort leaderboard by least steps and highest rewards
+        self.leaderboard.sort(key=lambda x: (x['steps'], -x['total_reward']))
+        # Keep only top 10 entries
+        self.leaderboard = self.leaderboard[:10]
+
+    def save_leaderboard(self, filename):
+        with open(filename, 'w') as file:
+            json.dump(self.leaderboard, file)
+
+    def load_leaderboard(self, filename):
+        with open(filename, 'r') as file:
+            self.leaderboard = json.load(file)
+
+    def display_leaderboard(self):
+        print("Leaderboard:")
+        for rank, entry in enumerate(self.leaderboard, start=1):
+            print(f"{rank}. Steps: {entry['steps']}, Total Reward: {entry['total_reward']}")
+
     def learn(self):
         for episode in range(1, self.episodes + 1):
             self.alpha = max(0.1, self.alpha * 0.995)  # Gradually decrease learning rate
@@ -154,6 +178,7 @@ class Agent:
                     reached_goal = True
 
             self.log_episode_progress(episode, steps, episode_rewards, reached_goal)
+            self.update_leaderboard(steps, episode_rewards)
 
             if self.visualize and episode % self.visualize_interval == 0:
                 plt.ioff()
@@ -247,7 +272,13 @@ start = (1, 1)
 end = (width - 2, height - 2)
 
 # Create Agent with visualization enabled
-agent = Agent(maze, start, end, episodes=100, alpha=0.7, gamma=0.9, epsilon=0.1, visualize=True, visualize_interval=10)
+agent = Agent(maze, start, end, episodes=10, alpha=0.7, gamma=0.9, epsilon=0.1, visualize=True, visualize_interval=10)
+
+# Load the leaderboard if it exists
+try:
+    agent.load_leaderboard('leaderboard.json')
+except FileNotFoundError:
+    pass
 
 # Agent learns the maze
 print("Agent is learning...")
@@ -255,6 +286,10 @@ agent.learn()
 print("Learning completed.")
 agent.save_q_table('q_table.json')
 agent.save_episode_log('episode_log.json')
+agent.save_leaderboard('leaderboard.json')
+
+# Display the leaderboard
+agent.display_leaderboard()
 
 # Load the Q-table if needed
 # agent.load_q_table('q_table.json')
